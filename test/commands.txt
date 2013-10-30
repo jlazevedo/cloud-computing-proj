@@ -1,0 +1,5 @@
+javac -cp $HADOOP_INSTALL/share/hadoop/common/hadoop-common-2.2.0.jar:$HADOOP_INSTALL/share/hadoop/mapreduce/hadoop-mapreduce-client-core-2.2.0.jar:$HADOOP_INSTALL/share/hadoop/common/lib/commons-cli-1.2.jar WordCounter.java
+
+jar cvf WordCounter.jar *.class
+
+hadoop jar WordCounter.jar WordCounter in.txt output
