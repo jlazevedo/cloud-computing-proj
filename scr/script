@@ -1,10 +1,10 @@
 #!/bin/bash
 
-javac -cp $HADOOP_INSTALL/share/hadoop/common/hadoop-common-2.2.0.jar:$HADOOP_INSTALL/share/hadoop/mapreduce/hadoop-mapreduce-client-core-2.2.0.jar:$HADOOP_INSTALL/share/hadoop/common/lib/commons-cli-1.2.jar ValuesWritable.java PhoneLogMapReduce.java
+javac -cp $HADOOP_INSTALL/share/hadoop/common/hadoop-common-2.2.0.jar:$HADOOP_INSTALL/share/hadoop/mapreduce/hadoop-mapreduce-client-core-2.2.0.jar:$HADOOP_INSTALL/share/hadoop/common/lib/commons-cli-1.2.jar:../lib/aws-java-sdk-1.6.4.jar:../third-party/commons-logging-1.1.1/commons-logging-1.1.1.jar:../third-party/httpcomponents-client-4.2.3/httpclient-4.2.3.jar  *.java
 
 echo "Compiled"
 
-jar cvf PhoneLog.jar *.class
+jar cvf PhoneLog.jar *.class *.properties
 
 echo "Compressed"
 

@@ -1,7 +1,7 @@
 
+
 import java.io.IOException;
 import java.text.DecimalFormat;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 
 import org.apache.hadoop.conf.Configuration;
@@ -15,10 +15,9 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -39,20 +38,27 @@ public class PhoneLogMapReduce {
 		public void map(Object key, Text value, Context context)
 				throws IOException, InterruptedException {
 
-			if (this.getEvent(value) != 0 && this.getEvent(value) != 1) {
-
-				this.handleValue(value);
-
-				context.write(phoneKey, phoneData);
-				context.write(cellKey, cellData);
-
-			} else {
-
+			switch (this.getEvent(value)) {
+			case 0:
+			case 1:
 				this.handleJustCell(value);
 				context.write(cellKey, cellData);
-
+				break;
+			case 2:
+			case 3:
+			case 8:
+				this.handleValue(value);
+				context.write(cellKey, cellData);
+			case 4:
+			case 5:
+				this.handleJustPhone(value);
+				context.write(phoneKey, phoneData);
+				break;
+			case 6:
+			case 7:
+			default:
+				break;
 			}
-
 
 		}
 
@@ -70,12 +76,12 @@ public class PhoneLogMapReduce {
 
 			phoneKey.set(pieces[4]);
 			phoneData = new ValuesWritable(pieces[1], pieces[2],
-									Integer.parseInt(pieces[3]), pieces[0]);
+					Integer.parseInt(pieces[3]), pieces[0]);
 
 			cellKey.set(pieces[0]);
 			cellData = new ValuesWritable(pieces[1], pieces[2],
-									Integer.parseInt(pieces[3]), pieces[4]);
-			
+					Integer.parseInt(pieces[3]), pieces[4]);
+
 		}
 
 
@@ -89,91 +95,257 @@ public class PhoneLogMapReduce {
 
 		}
 
+		private void handleJustPhone(Text value) {
+
+			String[] pieces = value.toString().split(";");
+
+			phoneKey.set(pieces[4]);
+			phoneData = new ValuesWritable(pieces[1], pieces[2],
+					Integer.parseInt(pieces[3]), pieces[0]);
+
+		}
+
 	}
 
 	public static class PhoneCellReducer extends Reducer<Text,ValuesWritable,Text,Text> {
 
-		private Text result = new Text();
+		private DynamoDBHandler dynamo = new DynamoDBHandler("phonerecords", "cellrecords");
+
+		private Text result = new Text("");
 
 		public void reduce(Text key, Iterable<ValuesWritable> values, Context context)
 				throws IOException, InterruptedException {
 
-			List<ValuesWritable> copy = new ArrayList<ValuesWritable>();
+			List<ValuesWritable> sortedValues = getSortedValues(values);			
 
-			for(ValuesWritable val : values)
-				copy.add(new ValuesWritable(val.getDay(),val.getMonth(),
-							val.getYear(),val.getHours(),val.getMinutes(),
-								val.getEventID(),val.getData()));
-			
-			System.out.println("init:");
-			
-			for(ValuesWritable val : copy)
-				System.out.println(val);
-			
-			Collections.sort(copy);
-			
-			System.out.println("after:");
-			
-			for(ValuesWritable val : copy)
-				System.out.println(val);
-			
-			String result = "";
+			List<String> result = new ArrayList<String>();
+
+			int orderNumber = 0;
+
+			ValuesWritable initalValueOnNetwork = null;
+			ValuesWritable lastValueOnNetwork = null;
+
+			int minutes = 0;
+
+			int leftNetwork = -1;
+
 
 			if(this.keyIsPhone(key)) {
 
-				System.out.println(key.toString());
+				String currentDate = sortedValues.get(0).getDate();
 
-				for (ValuesWritable val : copy) {
+				result.add(orderNumber, currentDate + ",");
 
-/*					try {
-						
-						Date date = new SimpleDateFormat("d-m-y").parse(val.toString());
-					
-					} catch (ParseException e) {
-						
-						System.out.println("Data Related Problems");
+				for (ValuesWritable val : sortedValues) {
+
+					if(!val.getDate().equals(currentDate)) {
+
+						if(leftNetwork == 0)
+							minutes = (lastValueOnNetwork.getHours() - initalValueOnNetwork.getHours())*60 +
+							(lastValueOnNetwork.getMinutes() - initalValueOnNetwork.getMinutes());
+
+						result.set(orderNumber, result.get(orderNumber) + "\b," + minutes) ;
+
+						orderNumber++;
+						currentDate = val.getDate();
+						result.add(orderNumber, currentDate + ",");
+
 					}
-	*/				
-					result = result + "date: " + getDate(val) + " cell: " + val.getData() + 
-							" event: " + val.getEventID() + " time: " + getTime(val) + "\n";
+
+					switch (val.getEventID()) {
+					case 2:
+						result.set(orderNumber, result.get(orderNumber) + val.getData() + ";");
+
+						break;
+					case 3:
+						break;
+					case 4:
+						initalValueOnNetwork = val;
+						lastValueOnNetwork = val;
+						leftNetwork = 0;
+						break;
+					case 5:
+						lastValueOnNetwork = val;
+
+						minutes = (lastValueOnNetwork.getHours() - initalValueOnNetwork.getHours())*60 +
+								(lastValueOnNetwork.getMinutes() - initalValueOnNetwork.getMinutes());
+
+						leftNetwork = 1;
+						break;
+					case 8:
+						lastValueOnNetwork = val;
+						break;
+
+					default:
+						break;
+					}
+
 
 				}
 
+
+				if(leftNetwork == 0)
+					minutes = (lastValueOnNetwork.getHours() - initalValueOnNetwork.getHours())*60 +
+					(lastValueOnNetwork.getMinutes() - initalValueOnNetwork.getMinutes());
+
+				result.set(orderNumber, result.get(orderNumber) + "\b," + minutes) ;
+
+
+
 			} else {
 
+				int currentHour = sortedValues.get(0).getHours();
 
+				result.add(orderNumber, sortedValues.get(0).getDate() + "|" + currentHour + ":00,");
+				
+				for (ValuesWritable val : sortedValues) {
+
+					switch (val.getEventID()) {
+					
+					case 2:
+					case 8:
+						
+						if(currentHour != val.getHours()) {
+				
+							currentHour = val.getHours();
+							orderNumber++;
+							
+							result.add(orderNumber, sortedValues.get(0).getDate() +
+																"|" + currentHour + ":00,");
+						}
+						
+						result.set(orderNumber, result.get(orderNumber) + val.getData() + ";");
+						
+						break;
+						
+					case 3:
+						
+						String aux = result.get(orderNumber).split(",")[0] + ",";
+						
+						for (String s :result.get(orderNumber).split(",")[1].split(";"))
+							if(!s.equals(val.getData()))
+								aux += s + ";";
+						
+						result.set(orderNumber, aux);
+						
+						break;
+
+					default:
+						break;
+					}
+
+				}				
 
 			}
 
-			this.result.set(result);
+
+
+
+			String joinString = "";
+
+
+			for (String s : result)
+				joinString += s + "\n";
+
+
+			this.result.set(joinString);
+
+			for (String s : result)				
+				dynamo.write(key, new Text(s));
+
 
 			context.write(key, this.result);
 		}
 
 		private boolean keyIsPhone(Text key) {  
-			
+
 			try {  	
 				Double.parseDouble(key.toString());  
-			
+
 			} catch(NumberFormatException nfe) {  
-				
+
 				return false;  
 			}
-			
+
 			return true;  
 		}
 
 		private String getDate(ValuesWritable value) {
 
 			return new DecimalFormat("00").format(value.getDay()) + "-" +
-						new DecimalFormat("00").format(value.getMonth()) + "-" +
-							new DecimalFormat("0000").format(value.getYear());
+					new DecimalFormat("00").format(value.getMonth()) + "-" +
+					new DecimalFormat("0000").format(value.getYear());
 		}
 
 		private String getTime(ValuesWritable value) {
 
 			return new DecimalFormat("00").format(value.getHours()) + ":" +
-							new DecimalFormat("00").format(value.getMinutes());
+					new DecimalFormat("00").format(value.getMinutes());
+		}
+		
+		@SuppressWarnings("deprecation")
+		private String upperDateTime(ValuesWritable value) {
+			
+			if (value.getMinutes() == 0)
+		
+				return value.dateTime();
+			
+			else {
+				
+				Calendar cal = Calendar.getInstance();
+			    cal.setTime(new Date(value.getYear(), value.getMonth(),
+			    				value.getDay(), value.getHours(), value.getMinutes()));
+			    cal.add(Calendar.HOUR_OF_DAY, 1);
+			    Date d = cal.getTime(); 
+
+			    return d.getDay() + "-" + d.getMonth() + "-" + d.getYear() 
+			    			+ "|" + d.getHours() + ":" + d.getMinutes();
+			}
+		}
+
+		private ArrayList<ValuesWritable> getSortedValues(Iterable<ValuesWritable> values) {
+
+			ArrayList<ValuesWritable> copy = new ArrayList<ValuesWritable>();
+
+			for(ValuesWritable val : values)
+				copy.add(new ValuesWritable(val.getDay(),val.getMonth(),
+						val.getYear(),val.getHours(),val.getMinutes(),
+						val.getEventID(),val.getData()));
+
+
+			Collections.sort(copy);
+
+			return copy;
+
+		}
+
+		private int pathOrderNumber(List<VisitedItem> path, String cellID) {
+
+			for (VisitedItem item : path)
+				if (item.getName() == cellID)
+					return item.orderNumber();
+
+			return -1;
+
+		}
+
+		private VisitedItem findItem(List<VisitedItem> path, String cellID) {
+
+			for (VisitedItem item : path)
+				if (item.getName().equals(cellID))
+					return item;
+
+			return null;
+		}
+
+		private void findAndUpdatePingedItem(List<VisitedItem> path, String cellID, String leaveDateTime) {
+
+			for (VisitedItem item : path)
+				if (item.getName().equals(cellID+"-cell") && !item.isFinished())
+					item.setLeaveDateTime(leaveDateTime);
+				else
+					if (item.getName().equals(cellID+"-network") && !item.isFinished())
+						item.setLeaveDateTime(leaveDateTime);
 		}
 
 	}
@@ -196,6 +368,7 @@ public class PhoneLogMapReduce {
 		job.setOutputValueClass(ValuesWritable.class);
 		FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
 		FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
+
 		System.exit(job.waitForCompletion(true) ? 0 : 1);
 	}
 }

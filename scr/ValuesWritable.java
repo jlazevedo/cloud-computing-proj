@@ -117,6 +117,15 @@ public class ValuesWritable implements WritableComparable<ValuesWritable> {
 	public void setData(String data) {
 		this.data = new Text(data);
 	}
+	
+	public String getDate() {
+		return  getDay()+"-"+getMonth()+"-"+getYear();
+	}
+	
+	public String dateTime() {
+		
+		return getDay()+"-"+getMonth()+"-"+getYear()+"|"+getHours()+":"+getMinutes();
+	}
 
 	@Override
 	public void readFields(DataInput in) throws IOException {
