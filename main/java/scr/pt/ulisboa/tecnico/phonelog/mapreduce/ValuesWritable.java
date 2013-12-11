@@ -1,3 +1,6 @@
+package pt.ulisboa.tecnico.phonelog.mapreduce;
+
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;

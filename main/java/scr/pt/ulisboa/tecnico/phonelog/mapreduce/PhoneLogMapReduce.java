@@ -1,23 +1,27 @@
-
+package pt.ulisboa.tecnico.phonelog.mapreduce;
 
 import java.io.IOException;
-import java.text.DecimalFormat;
-import java.text.SimpleDateFormat;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
+
+import com.amazonaws.services.dynamodb.model.AttributeValue;
+import com.willetinc.hadoop.mapreduce.dynamodb.DynamoDBConfiguration;
+import com.willetinc.hadoop.mapreduce.dynamodb.io.*;
+
+import pt.ulisboa.tecnico.phonelog.mapreduce.dynamodb.MyDynamoDBOutputFormat;
 
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
-import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.List;
 
 /**
@@ -25,6 +29,7 @@ import java.util.List;
  * @author João Azevedo
  *
  */
+@SuppressWarnings("deprecation")
 public class PhoneLogMapReduce {
 
 	public static class TokenizerMapper extends Mapper<Object, Text, Text, ValuesWritable> {
@@ -107,18 +112,16 @@ public class PhoneLogMapReduce {
 
 	}
 
-	public static class PhoneCellReducer extends Reducer<Text,ValuesWritable,Text,Text> {
+	public static class PhoneCellReducer extends Reducer<Text,ValuesWritable,DynamoDBItemWritable,NullWritable> {
 
-		private DynamoDBHandler dynamo = new DynamoDBHandler("phonerecords", "cellrecords");
-
-		private Text result = new Text("");
-
+		private List<DynamoDBItemWritable> result = new ArrayList<DynamoDBItemWritable>();
+		
 		public void reduce(Text key, Iterable<ValuesWritable> values, Context context)
 				throws IOException, InterruptedException {
 
 			List<ValuesWritable> sortedValues = getSortedValues(values);			
 
-			List<String> result = new ArrayList<String>();
+		//	List<String> result = new ArrayList<String>();
 
 			int orderNumber = 0;
 
@@ -129,12 +132,21 @@ public class PhoneLogMapReduce {
 
 			int leftNetwork = -1;
 
-
 			if(this.keyIsPhone(key)) {
 
-				String currentDate = sortedValues.get(0).getDate();
+				SWritable phoneNumber = new SWritable("phonenumber", new AttributeValue(key.toString())) {};
 
-				result.add(orderNumber, currentDate + ",");
+				
+				String currentDate = sortedValues.get(0).getDate();
+				
+				SWritable date = new SWritable("date", new AttributeValue(currentDate)) {};
+						
+				NWritable minutesOnNet;
+				
+				SSWritable finalTrace = null;
+				
+				List<String> trace = new ArrayList<String>();
+				
 
 				for (ValuesWritable val : sortedValues) {
 
@@ -144,18 +156,27 @@ public class PhoneLogMapReduce {
 							minutes = (lastValueOnNetwork.getHours() - initalValueOnNetwork.getHours())*60 +
 							(lastValueOnNetwork.getMinutes() - initalValueOnNetwork.getMinutes());
 
-						result.set(orderNumber, result.get(orderNumber) + "\b," + minutes) ;
-
+						finalTrace = new SSWritable("trace", new AttributeValue(trace)) {};
+						
+						trace.removeAll(trace);
+						
+						minutesOnNet = new NWritable("minutesonnet", new AttributeValue(minutes + "")) {};
+						
+						result.add(orderNumber, new DynamoDBItemWritable(phoneNumber, date, minutesOnNet, finalTrace) {});
+						
 						orderNumber++;
+						
+						date = new SWritable("date", new AttributeValue(val.getDate())) {};
+						
 						currentDate = val.getDate();
-						result.add(orderNumber, currentDate + ",");
-
+						
 					}
 
 					switch (val.getEventID()) {
 					case 2:
-						result.set(orderNumber, result.get(orderNumber) + val.getData() + ";");
-
+						
+						trace.add(val.getData());
+						
 						break;
 					case 3:
 						break;
@@ -187,46 +208,77 @@ public class PhoneLogMapReduce {
 				if(leftNetwork == 0)
 					minutes = (lastValueOnNetwork.getHours() - initalValueOnNetwork.getHours())*60 +
 					(lastValueOnNetwork.getMinutes() - initalValueOnNetwork.getMinutes());
+				
+				finalTrace = new SSWritable("trace", new AttributeValue(trace)) {};
 
-				result.set(orderNumber, result.get(orderNumber) + "\b," + minutes) ;
-
-
+				minutesOnNet = new NWritable("minutesonnet", new AttributeValue(minutes + "")) {};
+				
+				result.add(orderNumber, new DynamoDBItemWritable(phoneNumber, date, minutesOnNet, finalTrace) {});
+				
 
 			} else {
+				
+				SWritable cellID = new SWritable("cellid", new AttributeValue(key.toString())) {};
 
-				int currentHour = sortedValues.get(0).getHours();
+				int currentHour = sortedValues.get(0).getHours() + 1;
 
-				result.add(orderNumber, sortedValues.get(0).getDate() + "|" + currentHour + ":00,");
+				List<String> insideCell = new ArrayList<String>();
+				
+				List<String> insideCellControl = new ArrayList<String>();
+
+				SWritable dateTime = new SWritable("datetime",
+								new AttributeValue(upperDateTime(sortedValues.get(0)))) {};
 				
 				for (ValuesWritable val : sortedValues) {
 
 					switch (val.getEventID()) {
-					
+
 					case 2:
+
+						insideCellControl.add(val.getData());
+
 					case 8:
-						
-						if(currentHour != val.getHours()) {
-				
-							currentHour = val.getHours();
-							orderNumber++;
+
+						int valid = 0;
+						for (String s : insideCellControl)
+							if (s.equals(val.getData()))
+								valid = 1;
+						if (valid == 0)
+							break;
+
+						if(currentHour != ((val.getHours()+1)%24)) {
+
+							currentHour = ((val.getHours() + 1) % 24);
 							
-							result.add(orderNumber, sortedValues.get(0).getDate() +
-																"|" + currentHour + ":00,");
+							SSWritable phones = new SSWritable("phones", new AttributeValue(insideCell)) {};
+							
+							result.add(orderNumber, new DynamoDBItemWritable(cellID, dateTime, phones) {});
+							
+							orderNumber++;
+
+							dateTime = new SWritable("datetime", new AttributeValue(upperDateTime(val))) {};
+							
+							insideCell.removeAll(insideCell);
+							
+							insideCell.add(val.getData());
+							
+						} else {
+
+							if(!insideCell.contains(val.getData()))
+								insideCell.add(val.getData());
+							
 						}
-						
-						result.set(orderNumber, result.get(orderNumber) + val.getData() + ";");
-						
+
 						break;
-						
+
 					case 3:
+
+						if(!insideCell.contains(val.getData()))
+							insideCell.add(val.getData());
 						
-						String aux = result.get(orderNumber).split(",")[0] + ",";
-						
-						for (String s :result.get(orderNumber).split(",")[1].split(";"))
-							if(!s.equals(val.getData()))
-								aux += s + ";";
-						
-						result.set(orderNumber, aux);
+						for (String s : insideCellControl)
+							if (s.equals(val.getData()))
+								insideCellControl.remove(val.getData());
 						
 						break;
 
@@ -234,28 +286,25 @@ public class PhoneLogMapReduce {
 						break;
 					}
 
-				}				
-
+				}
+				
+				
+				if (!insideCell.isEmpty()) {
+					SSWritable phones = new SSWritable("phones", new AttributeValue(insideCell)) {};
+				
+					result.add(orderNumber, new DynamoDBItemWritable(cellID, dateTime, phones) {});
+				
+				}					
+			
 			}
 
 
+			for (DynamoDBItemWritable record : result)
+				context.write(record, NullWritable.get());
+			
 
-
-			String joinString = "";
-
-
-			for (String s : result)
-				joinString += s + "\n";
-
-
-			this.result.set(joinString);
-
-			for (String s : result)				
-				dynamo.write(key, new Text(s));
-
-
-			context.write(key, this.result);
 		}
+		
 
 		private boolean keyIsPhone(Text key) {  
 
@@ -270,36 +319,32 @@ public class PhoneLogMapReduce {
 			return true;  
 		}
 
-		private String getDate(ValuesWritable value) {
-
-			return new DecimalFormat("00").format(value.getDay()) + "-" +
-					new DecimalFormat("00").format(value.getMonth()) + "-" +
-					new DecimalFormat("0000").format(value.getYear());
-		}
-
-		private String getTime(ValuesWritable value) {
-
-			return new DecimalFormat("00").format(value.getHours()) + ":" +
-					new DecimalFormat("00").format(value.getMinutes());
-		}
-		
-		@SuppressWarnings("deprecation")
 		private String upperDateTime(ValuesWritable value) {
-			
+
 			if (value.getMinutes() == 0)
-		
+
 				return value.dateTime();
-			
+
 			else {
 				
-				Calendar cal = Calendar.getInstance();
-			    cal.setTime(new Date(value.getYear(), value.getMonth(),
-			    				value.getDay(), value.getHours(), value.getMinutes()));
-			    cal.add(Calendar.HOUR_OF_DAY, 1);
-			    Date d = cal.getTime(); 
+				Calendar cal = new GregorianCalendar(value.getYear(), value.getMonth(),
+						value.getDay(), value.getHours(), 0);
+				
+				System.out.println(cal.get(Calendar.DAY_OF_MONTH) + "-" + 
+						cal.get(Calendar.MONTH) + "-" + cal.get(Calendar.YEAR) 
+						+ "|" + cal.get(Calendar.HOUR) + ":" + cal.get(Calendar.MINUTE));
 
-			    return d.getDay() + "-" + d.getMonth() + "-" + d.getYear() 
-			    			+ "|" + d.getHours() + ":" + d.getMinutes();
+				
+				cal.add(Calendar.HOUR_OF_DAY, 1);
+				
+				System.out.println(cal.get(Calendar.DAY_OF_MONTH) + "-" + 
+						cal.get(Calendar.MONTH) + "-" + cal.get(Calendar.YEAR) 
+						+ "|" + cal.get(Calendar.HOUR) + ":" + cal.get(Calendar.MINUTE));
+
+				return cal.get(Calendar.DAY_OF_MONTH) + "-" + 
+						cal.get(Calendar.MONTH) + "-" + cal.get(Calendar.YEAR) 
+						+ "|" + cal.get(Calendar.HOUR) + ":" + cal.get(Calendar.MINUTE);
+
 			}
 		}
 
@@ -319,55 +364,34 @@ public class PhoneLogMapReduce {
 
 		}
 
-		private int pathOrderNumber(List<VisitedItem> path, String cellID) {
-
-			for (VisitedItem item : path)
-				if (item.getName() == cellID)
-					return item.orderNumber();
-
-			return -1;
-
-		}
-
-		private VisitedItem findItem(List<VisitedItem> path, String cellID) {
-
-			for (VisitedItem item : path)
-				if (item.getName().equals(cellID))
-					return item;
-
-			return null;
-		}
-
-		private void findAndUpdatePingedItem(List<VisitedItem> path, String cellID, String leaveDateTime) {
-
-			for (VisitedItem item : path)
-				if (item.getName().equals(cellID+"-cell") && !item.isFinished())
-					item.setLeaveDateTime(leaveDateTime);
-				else
-					if (item.getName().equals(cellID+"-network") && !item.isFinished())
-						item.setLeaveDateTime(leaveDateTime);
-		}
 
 	}
 
 
 	public static void main(String[] args) throws Exception {
+				
 		Configuration conf = new Configuration();
+		
+		conf.set(DynamoDBConfiguration.ACCESS_KEY_PROPERTY, "AKIAJG3MMHEHTFU2SQCA");
+		conf.set(DynamoDBConfiguration.SECRET_KEY_PROPERTY, "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");
+		conf.set(DynamoDBConfiguration.DYNAMODB_ENDPOINT, "dynamodb.us-west-2.amazonaws.com");
+		conf.set(DynamoDBConfiguration.OUTPUT_TABLE_NAME_PROPERTY, "cellrecords-phonerecords");
+		
 		String[] otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
 		if (otherArgs.length != 2) {
 			System.err.println("Usage: wordcount <in> <out>");
 			System.exit(2);
 		}
-		@SuppressWarnings("deprecation")
+		
 		Job job = new Job(conf, "Phone Log");
 		job.setJarByClass(PhoneLogMapReduce.class);
 		job.setMapperClass(TokenizerMapper.class);
-		//	job.setCombinerClass(PhoneCellReducer.class);
 		job.setReducerClass(PhoneCellReducer.class);
 		job.setOutputKeyClass(Text.class);
 		job.setOutputValueClass(ValuesWritable.class);
+		
 		FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
-		FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
+		job.setOutputFormatClass(MyDynamoDBOutputFormat.class);
 
 		System.exit(job.waitForCompletion(true) ? 0 : 1);
 	}

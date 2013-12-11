@@ -1,14 +1,17 @@
+package pt.ulisboa.tecnico.phonelog.dynamodb;
+
 import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.hadoop.io.Text;
 
 import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
-import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
+import com.amazonaws.services.dynamodb.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodb.model.AttributeValue;
+import com.amazonaws.services.dynamodb.model.PutItemRequest;
 
 
+@SuppressWarnings("deprecation")
 public class DynamoDBHandler {
 
 	static AmazonDynamoDBClient dynamoDB;
