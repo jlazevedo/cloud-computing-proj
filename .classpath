@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="main/java/src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="lib" path="/home/joao/Documents/IST/Mestrado/CN/lib/aws-java-sdk-1.6.4.jar"/>
+	<classpathentry kind="lib" path="/home/joao/Documents/IST/Mestrado/CN/lib/Hadoop-DynamoDB.jar"/>
+	<classpathentry kind="lib" path="/home/joao/Documents/IST/Mestrado/CN/lib/commons-cli-1.2.jar"/>
+	<classpathentry kind="lib" path="/home/joao/Documents/IST/Mestrado/CN/lib/hadoop-common-2.2.0.jar"/>
+	<classpathentry kind="lib" path="/home/joao/Documents/IST/Mestrado/CN/lib/hadoop-mapreduce-client-core-2.2.0.jar"/>
+	<classpathentry kind="lib" path="/home/joao/Documents/IST/Mestrado/CN/lib/httpcore-4.2.jar"/>
+	<classpathentry kind="lib" path="/home/joao/Documents/IST/Mestrado/CN/lib/httpclient-4.2.3.jar"/>
+	<classpathentry kind="lib" path="/home/joao/Documents/IST/Mestrado/CN/lib/jackson-core-2.1.1.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>

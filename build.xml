@@ -1,0 +1,23 @@
+
+<project name="Phone Logs" basedir=".">
+	<property environment="env"/>
+	
+    <path id="classpath">
+        <fileset dir="../lib/" includes="aws-java-sdk-1.6.4.jar"/>
+        <fileset dir="${env.HADOOP_INSTALL}/share/hadoop/common/" includes="hadoop-common-2.2.0.jar"/>
+        <fileset dir="${env.HADOOP_INSTALL}/share/hadoop/mapreduce/" includes="hadoop-mapreduce-client-core-2.2.0.jar"/>
+        <fileset dir="${env.HADOOP_INSTALL}/share/hadoop/mapreduce/lib" includes="hadoop-annotations-2.2.0.jar"/>
+        <fileset dir="${env.HADOOP_INSTALL}/share/hadoop/common/lib/" includes="commons-cli-1.2.jar"/>
+        <fileset dir="${env.HADOOP_INSTALL}/share/hadoop/common/lib/" includes="commons-logging-1.1.1.jar"/>
+        <fileset dir="../lib/" includes="Hadoop-DynamoDB.jar"/>
+        <pathelement location="."/>
+    </path>
+
+    <target name="prepare">
+        <javac srcdir="main/java/src" destdir="bin" classpathref="classpath"/>
+        <jar id="files" jarfile="PhoneLogSystem.jar">
+			<zipfileset dir="bin" includes="pt/**"/>
+			<zipfileset dir="../lib/" includes="Hadoop-DynamoDB.jar"/>
+		</jar>
+    </target>
+</project>
