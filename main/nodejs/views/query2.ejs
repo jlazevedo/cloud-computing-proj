@@ -1,0 +1,32 @@
+<% include layout %>
+<div class="row">
+  <h1 class="antialiased"> Query 2</h1>
+  <div class="panel">
+    <form action="/doQuery2" method="get">
+      <div class="row">
+        <div class="large-4 columns">
+          <label>Cell id</label>
+          <input type="text" name="cID" />
+        </div>
+        <div class="large-4 columns">
+          <label>Date</label>
+          <input type="text" name="date"/>
+        </div>
+        <div class="large-4 columns">
+          <label>Time</label>
+          <input type="text" name="time"/>
+        </div>
+        <div class="row collapse"></div>
+        <div class="large-4 columns">
+          <input name="stress" value="true" type="checkbox"><label for="stress">Stress</label>
+        </div>
+      </div>
+     <input type="submit" value="Submit" class="button small"/>
+    </form>
+    </div>
+</div>
+
+<div class="row">
+Given a cell-id, a date and a time (only the beggining of the hour is accepted, e.g. 12:00),
+list the phones present in that cell at that moment.
+</div>

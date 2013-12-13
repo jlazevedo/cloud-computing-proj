@@ -152,7 +152,8 @@ public class MyDynamoDBOutputFormat<K extends DynamoDBKeyWritable, V> extends
 			
 			UpdateItemRequest updateItemRequest = null;
 			
-			
+			/* Different treatment for cell or phone and does updates
+			 * instead of puts (update does put if the item does not exist) */
 			if(key.getHashKey().getFieldName().equals("cellid")){
 			
 				map.put("phones", new AttributeValueUpdate(((DynamoDBItemWritable) key).get(2), AttributeAction.ADD));
@@ -162,10 +163,7 @@ public class MyDynamoDBOutputFormat<K extends DynamoDBKeyWritable, V> extends
 			
 				client.updateItem(updateItemRequest);
 				
-			}
-				
-				
-			else if(key.getHashKey().getFieldName().equals("phonenumber")) {
+			} else if(key.getHashKey().getFieldName().equals("phonenumber")) {
 				
 				map.put("minutesonnet", new AttributeValueUpdate(((DynamoDBItemWritable) key).get(2), AttributeAction.PUT));
 				map.put("trace", new AttributeValueUpdate(((DynamoDBItemWritable) key).get(3), AttributeAction.ADD));
@@ -173,11 +171,8 @@ public class MyDynamoDBOutputFormat<K extends DynamoDBKeyWritable, V> extends
 				updateItemRequest = new UpdateItemRequest(phonesTable,
 												new Key(key.getHashKeyValue(), key.getRangeKeyValue()) , map);
 			
-				client.updateItem(updateItemRequest);
-				
+				client.updateItem(updateItemRequest);	
 			}
-
-			
 		}
 
 	}

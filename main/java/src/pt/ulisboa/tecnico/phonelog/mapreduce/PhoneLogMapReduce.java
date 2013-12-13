@@ -27,19 +27,33 @@ import java.util.List;
 /**
  * @author Diogo Antunes
  * @author João Azevedo
- *
+ * @version 2.0
+ * 
+ * The Class PhoneLogMapReduce.
  */
 @SuppressWarnings("deprecation")
 public class PhoneLogMapReduce {
 
+	/**
+	 * The Class TokenizerMapper.
+	 */
 	public static class TokenizerMapper extends Mapper<Object, Text, Text, ValuesWritable> {
 
+		/** The phone key. */
 		private Text phoneKey = new Text();
+		
+		/** The phone data. */
 		private ValuesWritable phoneData;
 
+		/** The cell key. */
 		private Text cellKey = new Text();
+		
+		/** The cell data. */
 		private ValuesWritable cellData;
 
+		/* (non-Javadoc)
+		 * @see org.apache.hadoop.mapreduce.Mapper#map(KEYIN, VALUEIN, org.apache.hadoop.mapreduce.Mapper.Context)
+		 */
 		public void map(Object key, Text value, Context context)
 				throws IOException, InterruptedException {
 
@@ -68,6 +82,12 @@ public class PhoneLogMapReduce {
 
 		}
 
+		/**
+		 * Gets the event.
+		 *
+		 * @param value the value
+		 * @return the event
+		 */
 		private int getEvent(Text value) {
 
 			String[] pieces = value.toString().split(";");
@@ -76,6 +96,11 @@ public class PhoneLogMapReduce {
 
 		}
 
+		/**
+		 * Handle value.
+		 *
+		 * @param value the value
+		 */
 		private void handleValue(Text value) {
 
 			String[] pieces = value.toString().split(";");
@@ -91,6 +116,11 @@ public class PhoneLogMapReduce {
 		}
 
 
+		/**
+		 * Handle just cell.
+		 *
+		 * @param value the value
+		 */
 		private void handleJustCell(Text value) {
 
 			String[] pieces = value.toString().split(";");
@@ -101,6 +131,11 @@ public class PhoneLogMapReduce {
 
 		}
 
+		/**
+		 * Handle just phone.
+		 *
+		 * @param value the value
+		 */
 		private void handleJustPhone(Text value) {
 
 			String[] pieces = value.toString().split(";");
@@ -113,10 +148,17 @@ public class PhoneLogMapReduce {
 
 	}
 
+	/**
+	 * The Class PhoneCellReducer.
+	 */
 	public static class PhoneCellReducer extends Reducer<Text,ValuesWritable,DynamoDBItemWritable,NullWritable> {
 
+		/** The result. */
 		private List<DynamoDBItemWritable> result = new ArrayList<DynamoDBItemWritable>();
 		
+		/* (non-Javadoc)
+		 * @see org.apache.hadoop.mapreduce.Reducer#reduce(KEYIN, java.lang.Iterable, org.apache.hadoop.mapreduce.Reducer.Context)
+		 */
 		public void reduce(Text key, Iterable<ValuesWritable> values, Context context)
 				throws IOException, InterruptedException {
 
@@ -204,7 +246,6 @@ public class PhoneLogMapReduce {
 
 
 				}
-
 
 				if(leftNetwork == 0)
 					minutes = (lastValueOnNetwork.getHours() - initalValueOnNetwork.getHours())*60 +
@@ -307,6 +348,12 @@ public class PhoneLogMapReduce {
 		}
 		
 
+		/**
+		 * Key is phone.
+		 *
+		 * @param key the key
+		 * @return true, if successful
+		 */
 		private boolean keyIsPhone(Text key) {  
 
 			try {  	
@@ -320,6 +367,12 @@ public class PhoneLogMapReduce {
 			return true;  
 		}
 
+		/**
+		 * Upper date time.
+		 *
+		 * @param value the value
+		 * @return the string
+		 */
 		private String upperDateTime(ValuesWritable value) {
 
 			if (value.getMinutes() == 0)
@@ -349,6 +402,12 @@ public class PhoneLogMapReduce {
 			}
 		}
 
+		/**
+		 * Gets the sorted values.
+		 *
+		 * @param values the values
+		 * @return the sorted values
+		 */
 		private ArrayList<ValuesWritable> getSortedValues(Iterable<ValuesWritable> values) {
 
 			ArrayList<ValuesWritable> copy = new ArrayList<ValuesWritable>();
@@ -369,6 +428,12 @@ public class PhoneLogMapReduce {
 	}
 
 
+	/**
+	 * The main method.
+	 *
+	 * @param args the arguments
+	 * @throws Exception the exception
+	 */
 	public static void main(String[] args) throws Exception {
 				
 		Configuration conf = new Configuration();

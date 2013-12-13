@@ -1,0 +1,28 @@
+<% include layout %>
+
+<div class="row">
+  <h1 class="antialiased"> Query 1 </h1>
+  <div class="panel">
+    <form action="/doQuery1" method="get">
+      <div class="row">
+        <div class="large-4 columns">
+          <label>Phone Number</label>
+          <input type="text" name="pID" />
+        </div>
+        <div class="large-4 columns">
+          <label>Date</label>
+          <input type="text" name="date"/>
+        </div>
+        <div class="row collapse"></div>
+        <div class="large-4 columns">
+          <input name="stress" value="true" type="checkbox"><label for="stress">Stress</label>
+        </div>
+      </div>
+     <input type="submit" value="Submit" class="button small"/>
+    </form>
+    </div>
+</div>
+
+<div class="row">
+Given a phone-id and a date, return the sequence of cells visited by that phone on that day.
+</div>
